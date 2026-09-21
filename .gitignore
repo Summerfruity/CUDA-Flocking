@@ -249,6 +249,8 @@ install_manifest.txt
 x64/
 x86/
 build/
+build_*/
+benchmarks/__pycache__/
 bld/
 [Bb]in/
 [Oo]bj/

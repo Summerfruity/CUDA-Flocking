@@ -47,7 +47,10 @@ void checkCUDAError(const char *msg, int line = -1) {
 *****************/
 
 /*! Block size used for CUDA kernel launch. */
-#define blockSize 128
+#ifndef FLOCKING_BLOCK_SIZE
+#define FLOCKING_BLOCK_SIZE 128
+#endif
+#define blockSize FLOCKING_BLOCK_SIZE
 
 // LOOK-1.2 Parameters for the boids algorithm.
 // These worked well in our reference implementation.

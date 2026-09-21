@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.18)
 project(cis5650_boids LANGUAGES CUDA CXX)
 
+set(FLOCKING_BLOCK_SIZE 128 CACHE STRING "CUDA threads per block for flocking kernels")
+set(FLOCKING_VISUALIZE 1 CACHE STRING "Render OpenGL boids (1) or run simulation without draw calls (0)")
+
 # Helpful for IDE tooling (IntelliSense/clangd). Some generators may ignore it,
 # but it is safe to enable.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -82,6 +85,16 @@ source_group(Sources FILES ${sources})
 
 add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
 
+# Headless CUDA-event benchmark. It reuses the simulation kernels but does not
+# create a GLFW/OpenGL context, so benchmark timings exclude rendering.
+add_executable(cis5650_benchmark
+    benchmarks/benchmark_main.cpp
+    src/kernel.cu
+    src/utilityCore.cpp
+    src/utilityCore.hpp
+    src/cudaMat4.hpp
+)
+
 # Make CUDA headers available to all translation units for both build + IDE.
 if(CUDAToolkit_FOUND)
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
@@ -91,6 +104,14 @@ elseif(DEFINED ENV{CUDA_PATH})
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE "$ENV{CUDA_PATH}/include")
 endif()
 target_link_libraries(${CMAKE_PROJECT_NAME} ${GL_LIBRARIES} CCCL::Thrust)
+target_link_libraries(cis5650_benchmark PRIVATE CCCL::Thrust)
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    FLOCKING_BLOCK_SIZE=${FLOCKING_BLOCK_SIZE}
+    FLOCKING_VISUALIZE=${FLOCKING_VISUALIZE}
+)
+target_compile_definitions(cis5650_benchmark PRIVATE
+    FLOCKING_BLOCK_SIZE=${FLOCKING_BLOCK_SIZE}
+)
 if(CMAKE_VERSION VERSION_LESS "3.23.0")
     set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES OFF)
 elseif(CMAKE_VERSION VERSION_LESS "3.24.0")
@@ -98,6 +119,25 @@ elseif(CMAKE_VERSION VERSION_LESS "3.24.0")
 else()
     set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES native)
 endif()
+if(CMAKE_VERSION VERSION_LESS "3.23.0")
+    set_target_properties(cis5650_benchmark PROPERTIES CUDA_ARCHITECTURES OFF)
+elseif(CMAKE_VERSION VERSION_LESS "3.24.0")
+    set_target_properties(cis5650_benchmark PROPERTIES CUDA_ARCHITECTURES all-major)
+else()
+    set_target_properties(cis5650_benchmark PROPERTIES CUDA_ARCHITECTURES native)
+endif()
+
+if(CUDAToolkit_FOUND)
+    target_include_directories(cis5650_benchmark PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+elseif(DEFINED CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+    target_include_directories(cis5650_benchmark PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+elseif(DEFINED ENV{CUDA_PATH})
+    target_include_directories(cis5650_benchmark PRIVATE "$ENV{CUDA_PATH}/include")
+endif()
+target_include_directories(cis5650_benchmark PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${GLM_INCLUDE_DIRS}
+)
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE "$<$<AND:$<CONFIG:Debug,RelWithDebInfo>,$<COMPILE_LANGUAGE:CUDA>>:-G>")
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
 
